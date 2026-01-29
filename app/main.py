@@ -258,23 +258,23 @@ SITES = {
     "newegg": {
         "name": "Newegg Open Box",
         "search_url": "https://www.newegg.com/p/pl?d={query}&N=4814",
-        "goal": "Extract the first 5 Certified Refurbished '{query}' devices only. Skip accessories, cables, parts, cases, and batteries. Only include actual '{query}' products. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
+        "goal": "Extract the first 5 Open Box products that match '{query}'. Only include products related to '{query}'. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields. Skip sponsored items.",
     },
     "backmarket": {
         "name": "BackMarket",
         "search_url": "https://www.backmarket.com/en-us/search?q={query}",
         "goal": "Extract the first 5 refurbished products that match '{query}'. Only include products related to '{query}'. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
     },
-    "bhphoto": {
-        "name": "B&H Photo",
-        "search_url": "https://www.bhphotovideo.com/c/search?q={query}&fct=fct_condition_background%7cused",
-        "goal": "If you see a Cloudflare security check or 'Verify you are human' checkbox, click the checkbox to pass. Then extract the first 5 Used products that match '{query}'. Only include products related to '{query}'. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
+    "swappa": {
+        "name": "Swappa",
+        "search_url": "https://swappa.com/search?q={query}",
+        "goal": "Extract the first 5 products that match '{query}'. Only include actual devices, skip accessories. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
         "browser_profile": "stealth"
     },
-    "ebay": {
-        "name": "eBay Refurbished",
-        "search_url": "https://www.ebay.com/sch/i.html?_nkw={query}&LH_ItemCondition=2500&rt=nc",
-        "goal": "Extract the first 5 Certified Refurbished products that match '{query}'. Only include products related to '{query}'. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
+    "walmart": {
+        "name": "Walmart Renewed",
+        "search_url": "https://www.walmart.com/search?q={query}+renewed",
+        "goal": "Extract the first 5 Renewed/Refurbished products that match '{query}'. Only include actual devices, skip accessories. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
         "browser_profile": "stealth"
     },
     "target": {
