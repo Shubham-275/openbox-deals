@@ -84,7 +84,7 @@ class RateLimiter:
 
 class ActiveSearchTracker:
     """Prevents concurrent searches with TTL cleanup"""
-    def __init__(self, max_active: int = 1000, search_timeout: int = 180):
+    def __init__(self, max_active: int = 1000, search_timeout: int = 300):
         self.active_searches = {}  # ip -> (search_id, start_time)
         self.max_active = max_active
         self.search_timeout = search_timeout
@@ -245,71 +245,46 @@ SITES = {
     "amazon": {
         "name": "Amazon Warehouse",
         "search_url": "https://www.amazon.com/s?k={query}&i=warehouse-deals",
-        "goal": """Extract the first 5 products from this Amazon Warehouse page.
-Return ONLY a raw JSON array (no markdown, no explanation, no code blocks).
-Each product object must have: name, original_price, sale_price, condition, product_url.
-If a field is not found, use null. Example format:
-[{"name":"Product Name","original_price":"$100","sale_price":"$80","condition":"Used - Good","product_url":"https://..."}]""",
+        "goal": "Extract the first 5 products. Return ONLY a JSON array: [{name, original_price, sale_price, condition, product_url}]. Use null for missing fields.",
         "browser_profile": "stealth",
         "proxy_config": {"enabled": True, "country_code": "US"}
     },
     "bestbuy": {
         "name": "Best Buy Outlet",
         "search_url": "https://www.bestbuy.com/site/searchpage.jsp?st={query}&qp=condition_facet%3DCondition~Open-Box",
-        "goal": """Extract the first 5 Open-Box products from Best Buy.
-Return ONLY a raw JSON array (no markdown, no explanation, no code blocks).
-Each product object must have: name, original_price, sale_price, condition, product_url.
-If a field is not found, use null.""",
+        "goal": "Extract the first 5 Open-Box products. Return ONLY a JSON array: [{name, original_price, sale_price, condition, product_url}]. Use null for missing fields.",
         "browser_profile": "stealth"
     },
     "newegg": {
         "name": "Newegg Open Box",
         "search_url": "https://www.newegg.com/p/pl?d={query}&N=4814",
-        "goal": """Extract the first 5 Open Box products from Newegg.
-Return ONLY a raw JSON array (no markdown, no explanation, no code blocks).
-Each product object must have: name, original_price, sale_price, condition, product_url.
-If a field is not found, use null."""
+        "goal": "Extract the first 5 Open Box products. Return ONLY a JSON array: [{name, original_price, sale_price, condition, product_url}]. Use null for missing fields."
     },
     "backmarket": {
         "name": "BackMarket",
         "search_url": "https://www.backmarket.com/en-us/search?q={query}",
-        "goal": """Extract the first 5 refurbished products from BackMarket.
-Return ONLY a raw JSON array (no markdown, no explanation, no code blocks).
-Each product object must have: name, original_price, sale_price, condition, product_url.
-If a field is not found, use null."""
+        "goal": "Extract the first 5 refurbished products. Return ONLY a JSON array: [{name, original_price, sale_price, condition, product_url}]. Use null for missing fields."
     },
     "bhphoto": {
         "name": "B&H Photo",
         "search_url": "https://www.bhphotovideo.com/c/search?q={query}&fct=fct_condition_background%7cused",
-        "goal": """Extract the first 5 Used/Open Box products from B&H Photo.
-Return ONLY a raw JSON array (no markdown, no explanation, no code blocks).
-Each product object must have: name, original_price, sale_price, condition, product_url.
-If a field is not found, use null."""
+        "goal": "Extract the first 5 Used products. Return ONLY a JSON array: [{name, original_price, sale_price, condition, product_url}]. Use null for missing fields."
     },
     "ebay": {
         "name": "eBay Refurbished",
-        "search_url": "https://www.ebay.com/sch/i.html?_nkw={query}&LH_ItemCondition=2500",
-        "goal": """Extract the first 5 Certified Refurbished products from eBay.
-Return ONLY a raw JSON array (no markdown, no explanation, no code blocks).
-Each product object must have: name, original_price, sale_price, condition, product_url.
-If a field is not found, use null.""",
+        "search_url": "https://www.ebay.com/sch/i.html?_nkw={query}&LH_ItemCondition=2500&rt=nc",
+        "goal": "Extract the first 5 Certified Refurbished products. Return ONLY a JSON array: [{name, original_price, sale_price, condition, product_url}]. Use null for missing fields.",
         "browser_profile": "stealth"
     },
     "target": {
         "name": "Target Clearance",
         "search_url": "https://www.target.com/s?searchTerm={query}&facetedValue=5zja2",
-        "goal": """Extract the first 5 Clearance products from Target.
-Return ONLY a raw JSON array (no markdown, no explanation, no code blocks).
-Each product object must have: name, original_price, sale_price, condition, product_url.
-If a field is not found, use null."""
+        "goal": "Extract the first 5 Clearance products. Return ONLY a JSON array: [{name, original_price, sale_price, condition, product_url}]. Use null for missing fields."
     },
     "microcenter": {
         "name": "Micro Center",
         "search_url": "https://www.microcenter.com/search/search_results.aspx?Ntt={query}&Ntk=all&N=4294966998",
-        "goal": """Extract the first 5 Open Box products from Micro Center.
-Return ONLY a raw JSON array (no markdown, no explanation, no code blocks).
-Each product object must have: name, original_price, sale_price, condition, product_url.
-If a field is not found, use null."""
+        "goal": "Extract the first 5 Open Box products. Return ONLY a JSON array: [{name, original_price, sale_price, condition, product_url}]. Use null for missing fields."
     }
 }
 
@@ -442,7 +417,7 @@ async def search_live(
                         MINO_API_URL,
                         json=payload,
                         headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=90)  # 90s per site max
+                        timeout=aiohttp.ClientTimeout(total=200)  # 200s per site max
                     ) as response:
                         
                         if response.status != 200:
@@ -540,7 +515,7 @@ async def search_live(
                         "type": "session_error",
                         "site": site_key,
                         "site_name": site_config["name"],
-                        "error": "Timeout (90s)"
+                        "error": "Timeout (200s)"
                     })
                 except Exception as e:
                     await event_queue.put({
@@ -582,9 +557,9 @@ async def search_live(
                     elapsed = round(time.time() - start_time, 1)
                     yield f"data: {json.dumps({'type': 'heartbeat', 'elapsed': elapsed})}\n\n"
                     
-                    # Global timeout: 2 minutes max
-                    if elapsed > 120:
-                        yield f"data: {json.dumps({'type': 'timeout', 'message': 'Search timeout after 2 minutes'})}\n\n"
+                    # Global timeout: 4 minutes max
+                    if elapsed > 240:
+                        yield f"data: {json.dumps({'type': 'timeout', 'message': 'Search timeout after 4 minutes'})}\n\n"
                         break
             
             # Cancel any remaining tasks
