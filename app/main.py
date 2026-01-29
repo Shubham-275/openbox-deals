@@ -258,7 +258,7 @@ SITES = {
     "newegg": {
         "name": "Newegg Open Box",
         "search_url": "https://www.newegg.com/p/pl?d={query}&N=4814",
-        "goal": "Extract the first 5 Open Box products that match '{query}'. Only include products related to '{query}'. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields. Skip sponsored items.",
+        "goal": "Extract the first 5 Certified Refurbished '{query}' devices only. Skip accessories, cables, parts, cases, and batteries. Only include actual '{query}' products. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
     },
     "backmarket": {
         "name": "BackMarket",
