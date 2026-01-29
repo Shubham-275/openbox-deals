@@ -27,20 +27,44 @@ MINO_API_URL = "https://mino.ai/v1/automation/run-sse"
 MINO_API_KEY = os.getenv("MINO_API_KEY", "")
 
 # =============================================================================
-# RATE LIMITING & REQUEST DEDUPLICATION
+# RATE LIMITING & REQUEST DEDUPLICATION (with memory protection)
 # =============================================================================
 
 class RateLimiter:
-    """Simple in-memory rate limiter (use Redis for multi-instance)"""
-    def __init__(self, requests_per_minute: int = 5):
+    """In-memory rate limiter with TTL cleanup and max size protection"""
+    def __init__(self, requests_per_minute: int = 5, max_ips: int = 10000):
         self.requests_per_minute = requests_per_minute
-        self.requests = defaultdict(list)  # ip -> [timestamps]
+        self.max_ips = max_ips
+        self.requests = {}  # ip -> [timestamps]
+        self.last_cleanup = time.time()
+    
+    def _cleanup(self):
+        """Remove stale entries older than 2 minutes"""
+        now = time.time()
+        if now - self.last_cleanup < 30:  # Cleanup every 30 seconds max
+            return
+        
+        cutoff = now - 120  # 2 minute TTL
+        stale_ips = [ip for ip, timestamps in self.requests.items() 
+                     if not timestamps or max(timestamps) < cutoff]
+        for ip in stale_ips:
+            del self.requests[ip]
+        self.last_cleanup = now
     
     def is_allowed(self, client_ip: str) -> bool:
+        self._cleanup()
+        
+        # Memory protection: reject if too many unique IPs
+        if len(self.requests) >= self.max_ips and client_ip not in self.requests:
+            return False
+        
         now = time.time()
         minute_ago = now - 60
         
-        # Clean old requests
+        # Initialize or clean old requests for this IP
+        if client_ip not in self.requests:
+            self.requests[client_ip] = []
+        
         self.requests[client_ip] = [
             ts for ts in self.requests[client_ip] if ts > minute_ago
         ]
@@ -52,24 +76,48 @@ class RateLimiter:
         return True
     
     def time_until_allowed(self, client_ip: str) -> int:
-        if not self.requests[client_ip]:
+        if client_ip not in self.requests or not self.requests[client_ip]:
             return 0
         oldest = min(self.requests[client_ip])
         return max(0, int(60 - (time.time() - oldest)))
 
 
 class ActiveSearchTracker:
-    """Prevents users from spamming concurrent searches"""
-    def __init__(self):
-        self.active_searches = {}  # ip -> search_id
+    """Prevents concurrent searches with TTL cleanup"""
+    def __init__(self, max_active: int = 1000, search_timeout: int = 180):
+        self.active_searches = {}  # ip -> (search_id, start_time)
+        self.max_active = max_active
+        self.search_timeout = search_timeout
+        self.last_cleanup = time.time()
+    
+    def _cleanup(self):
+        """Remove searches older than timeout"""
+        now = time.time()
+        if now - self.last_cleanup < 30:
+            return
+        
+        stale = [ip for ip, (_, start) in self.active_searches.items()
+                 if now - start > self.search_timeout]
+        for ip in stale:
+            del self.active_searches[ip]
+        self.last_cleanup = now
     
     def start_search(self, client_ip: str, query: str) -> str:
+        self._cleanup()
         search_id = hashlib.md5(f"{client_ip}:{query}:{time.time()}".encode()).hexdigest()[:8]
-        self.active_searches[client_ip] = search_id
+        self.active_searches[client_ip] = (search_id, time.time())
         return search_id
     
     def is_searching(self, client_ip: str) -> bool:
-        return client_ip in self.active_searches
+        self._cleanup()
+        if client_ip not in self.active_searches:
+            return False
+        # Check if search has timed out
+        _, start_time = self.active_searches[client_ip]
+        if time.time() - start_time > self.search_timeout:
+            del self.active_searches[client_ip]
+            return False
+        return True
     
     def end_search(self, client_ip: str):
         self.active_searches.pop(client_ip, None)
@@ -509,13 +557,23 @@ async def search_live(
             
             sites_done = 0
             total_sites = len(SITES)
+            cancelled = False
             
-            while sites_done < total_sites:
+            while sites_done < total_sites and not cancelled:
+                # 🔴 CRITICAL: Check if client disconnected (prevents ghost tasks)
+                if await request.is_disconnected():
+                    print(f"[{search_id}] Client disconnected - cancelling all tasks")
+                    for task in tasks:
+                        if not task.done():
+                            task.cancel()
+                    cancelled = True
+                    break
+                
                 # Check for each site task completion
-                for task in tasks:
-                    if task.done():
-                        tasks.remove(task)
-                        sites_done += 1
+                done_tasks = [t for t in tasks if t.done()]
+                for task in done_tasks:
+                    tasks.remove(task)
+                    sites_done += 1
                 
                 try:
                     event = await asyncio.wait_for(event_queue.get(), timeout=1.0)
@@ -555,38 +613,64 @@ async def search_live(
 # =============================================================================
 
 def extract_products(result_data) -> list:
-    """Extract products from various response formats"""
+    """Extract products from various response formats with robust error handling"""
     
     # Handle string responses (AI may return JSON as string)
     if isinstance(result_data, str):
+        clean_str = result_data.strip()
+        
+        # Remove markdown code blocks
+        clean_str = re.sub(r'^```json\s*', '', clean_str)
+        clean_str = re.sub(r'^```\s*', '', clean_str)
+        clean_str = re.sub(r'\s*```$', '', clean_str)
+        clean_str = clean_str.strip()
+        
+        # Try direct parse first
         try:
-            clean_str = result_data.strip()
-            clean_str = re.sub(r'^```json\s*', '', clean_str)
-            clean_str = re.sub(r'^```\s*', '', clean_str)
-            clean_str = re.sub(r'\s*```$', '', clean_str)
-            clean_str = clean_str.strip()
-            
             parsed = json.loads(clean_str)
             return extract_products(parsed)
         except json.JSONDecodeError:
-            match = re.search(r'\[[\s\S]*\]', result_data)
-            if match:
-                try:
-                    parsed = json.loads(match.group())
-                    return extract_products(parsed)
-                except:
-                    pass
-            return []
+            pass
+        
+        # Fix common LLM JSON errors
+        fixed_str = clean_str
+        # Remove trailing commas before ] or }
+        fixed_str = re.sub(r',\s*([}\]])', r'\1', fixed_str)
+        # Fix single quotes to double quotes
+        fixed_str = re.sub(r"'([^']*)':", r'"\1":', fixed_str)
+        # Remove any control characters
+        fixed_str = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', fixed_str)
+        
+        try:
+            parsed = json.loads(fixed_str)
+            return extract_products(parsed)
+        except json.JSONDecodeError:
+            pass
+        
+        # Last resort: find JSON array in the mess
+        match = re.search(r'\[[\s\S]*?\](?=\s*$|\s*[^,\[\{])', result_data)
+        if match:
+            try:
+                # Also try fixing this extracted portion
+                extracted = match.group()
+                extracted = re.sub(r',\s*([}\]])', r'\1', extracted)
+                parsed = json.loads(extracted)
+                return extract_products(parsed)
+            except:
+                pass
+        
+        return []
     
     if isinstance(result_data, list):
-        return result_data
+        # Filter out any non-dict items
+        return [item for item in result_data if isinstance(item, dict)]
     
     if isinstance(result_data, dict):
         for key in ["products", "result", "data", "items", "results"]:
             if key in result_data:
                 val = result_data[key]
                 if isinstance(val, list):
-                    return val
+                    return [item for item in val if isinstance(item, dict)]
                 elif isinstance(val, str):
                     return extract_products(val)
         

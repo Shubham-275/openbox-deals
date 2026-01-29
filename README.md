@@ -1,6 +1,7 @@
-# Open-Box Deals Aggregator
+# Open-Box Deals Aggregator v5
+## Warehouse Receipt Edition - Production Ready
 
-**Warehouse Receipt Edition** — A retro-styled deal finder with live browser streaming and dynamic savings calculation.
+A real-time open-box/refurbished deals aggregator with live browser streaming. Features a retro warehouse receipt UI theme.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -11,30 +12,16 @@
 ├─────────────────────────────────────────────────┤
 │ [Search Inventory___________] [Max $] [SEARCH]  │
 ├─────────────────────────────────────────────────┤
-│ TXN #38472910    01/29/2026 14:32:07   8 SITES  │
-├─────────────────────────────────────────────────┤
 │  AMAZON   │  BEST BUY │  NEWEGG  │  BACKMARKET  │
 │  ● LIVE   │  ● LIVE   │  ○ WAIT  │  ○ WAIT      │
-│ [browser] │ [browser] │ [ready]  │ [ready]      │
 ├─────────────────────────────────────────────────┤
 │ ITEM DESCRIPTION              WAS        NOW    │
 │─────────────────────────────────────────────────│
 │ AirPods Pro 2nd Gen         $249.00   $189.99  │
-│ Condition: LIKE NEW                  SAVE $59   │
 │ VIA AMAZON WAREHOUSE        [OPEN BOX]  (24%)   │
-│.............................................    │
 ├─ ✂ ─────────────────────────────────────────────┤
 │ ITEMS FOUND:                              24    │
-│ SITES SEARCHED:                         8 / 8   │
-│ SEARCH TIME:                         42.3 SEC   │
 │ AVG SAVINGS:                           27% OFF  │
-│─────────────────────────────────────────────────│
-│ POTENTIAL SAVINGS:               UP TO 45% OFF  │
-├─────────────────────────────────────────────────┤
-│                   ★ ★ ★                         │
-│         THANK YOU FOR SHOPPING SMART            │
-│          DEALS REFRESH EVERY 30 MIN             │
-│                   ★ ★ ★                         │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -44,7 +31,7 @@
 - 🖥️ **8 Live Browser Windows** — Watch Mino scrape in real-time
 - 💰 **Dynamic Savings** — Per-item and aggregate calculations
 - ⚡ **Parallel Scraping** — All 8 sites simultaneously
-- 📊 **Smart Sorting** — Best deals (highest % off) first
+- 🔒 **Production Security** — Rate limiting, XSS protection, input validation
 
 ## Quick Start
 
@@ -62,26 +49,13 @@ uvicorn app.main:app --reload
 open http://localhost:8000
 ```
 
-## Savings Calculation
-
-```javascript
-// Per Product
-original_price = $249.00
-sale_price = $189.99
-savings_amount = $249.00 - $189.99 = $59.01
-savings_percent = ($59.01 / $249.00) × 100 = 24%
-
-// Aggregate (Footer)
-max_percent = highest % across all products
-avg_percent = average % across products with savings
-```
-
 ## API Endpoints
 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /` | Warehouse Receipt UI |
 | `GET /api/search/live?q=airpods` | SSE stream with live browsers |
+| `GET /api/search/status` | Check if user can search (rate limit) |
 | `GET /api/sites` | List all supported sites |
 
 ## Supported Sites
@@ -110,6 +84,38 @@ avg_percent = average % across products with savings
 - **Frontend:** Vanilla JS + IBM Plex Mono
 - **Scraping:** Mino API (parallel SSE streams)
 - **Styling:** Custom receipt/thermal printer CSS
+
+---
+
+## V5 Security & Production Fixes
+
+### Security
+- ✅ **Rate Limiting**: 5 requests/minute per IP (in-memory, use Redis for multi-instance)
+- ✅ **XSS Protection**: URL validation (only http/https allowed in product links)
+- ✅ **Input Validation**: Query length limit (100 chars), dangerous character filtering
+- ✅ **Product Sanitization**: All scraped data sanitized before sending to frontend
+
+### Reliability  
+- ✅ **Request Deduplication**: Prevents concurrent searches from same user
+- ✅ **Session Health**: Auto-refreshes aiohttp session every hour
+- ✅ **Strict Price Filtering**: Excludes items with unparseable prices when filter is set
+- ✅ **Global Timeout**: 2 minute max search time (prevents orphaned tasks)
+- ✅ **Per-Site Timeout**: 90 seconds max per retailer
+
+### Frontend
+- ✅ **Spam Prevention**: Disables search button during active search
+- ✅ **Rate Limit UI**: Shows user-friendly error when rate limited
+- ✅ **URL Validation**: Client-side XSS protection for product links
+
+---
+
+## V4 Changelog (Previous)
+
+- Fixed `resultJson` parsing (Mino API response format)
+- Handles AI responses with markdown code blocks
+- Proper SSE buffering (no more split packet issues)
+- Connection pooling (single aiohttp session)
+- Stricter AI goals for cleaner JSON output
 
 ## License
 
