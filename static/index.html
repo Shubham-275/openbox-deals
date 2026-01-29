@@ -724,6 +724,8 @@
             }
         }
         
+        let isSearching = false;  // Prevent spam clicks
+        
         async function startSearch() {
             const query = document.getElementById('searchQuery').value.trim();
             const maxPrice = document.getElementById('maxPrice').value;
@@ -733,16 +735,30 @@
                 return;
             }
             
+            // Prevent concurrent searches
+            if (isSearching) {
+                alert('Search already in progress. Please wait for it to complete.');
+                return;
+            }
+            
+            // Validate query length
+            if (query.length > 100) {
+                alert('Search query too long (max 100 characters)');
+                return;
+            }
+            
             // Reset
             allProducts = [];
             sitesCompleted = 0;
             startTime = Date.now();
+            isSearching = true;
             
             initBrowserPanels();
             updateDateTime();
             generateBarcode();
             
             document.getElementById('searchBtn').disabled = true;
+            document.getElementById('searchBtn').textContent = 'SEARCHING...';
             document.getElementById('statusSection').style.display = 'flex';
             document.getElementById('spinner').classList.add('active');
             document.getElementById('statusText').innerHTML = 'Connecting to warehouses<span class="loading-dots"></span>';
@@ -768,37 +784,78 @@
             
             try {
                 const response = await fetch(url);
+                
+                // Handle rate limiting
+                if (response.status === 429) {
+                    const error = await response.json();
+                    alert(error.error || 'Too many requests. Please wait a moment.');
+                    finishSearch();
+                    return;
+                }
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
+                
+                // Buffer for incomplete lines (critical fix for SSE parsing)
+                let buffer = '';
                 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
                     
-                    const text = decoder.decode(value);
-                    const lines = text.split('\n');
+                    // Append to buffer with stream mode
+                    buffer += decoder.decode(value, { stream: true });
                     
+                    // Split into lines
+                    const lines = buffer.split('\n');
+                    
+                    // Keep the last (possibly incomplete) line in buffer
+                    buffer = lines.pop() || '';
+                    
+                    // Process complete lines
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             try {
                                 const event = JSON.parse(line.slice(6));
                                 handleEvent(event);
-                            } catch (e) {}
+                            } catch (e) {
+                                console.warn('Failed to parse SSE:', e);
+                            }
                         }
                     }
+                }
+                
+                // Process any remaining buffer
+                if (buffer.startsWith('data: ')) {
+                    try {
+                        const event = JSON.parse(buffer.slice(6));
+                        handleEvent(event);
+                    } catch (e) {}
                 }
             } catch (error) {
                 console.error('Search error:', error);
                 document.getElementById('statusText').textContent = `ERROR: ${error.message}`;
             }
             
+            finishSearch();
+        }
+        
+        function finishSearch() {
+            isSearching = false;
             clearInterval(timerInterval);
             document.getElementById('spinner').classList.remove('active');
             document.getElementById('searchBtn').disabled = false;
+            document.getElementById('searchBtn').textContent = 'SEARCH';
         }
         
         function handleEvent(event) {
             console.log('Event received:', event);  // Debug logging
+            
+            // Handle timeout event
+            if (event.type === 'timeout') {
+                document.getElementById('statusText').textContent = event.message || 'Search timed out';
+                finishSearch();
+                return;
+            }
             
             switch (event.type) {
                 case 'search_start':
@@ -940,7 +997,17 @@
                 const salePrice = p.sale_price || p.price || 'N/A';
                 const originalPrice = p.original_price;
                 const condition = p.condition || '';
-                const url = p.product_url || p.url || '#';
+                
+                // XSS Protection: Validate URL scheme
+                let url = p.product_url || p.url || '#';
+                try {
+                    const urlObj = new URL(url);
+                    if (!['http:', 'https:'].includes(urlObj.protocol)) {
+                        url = '#';  // Invalid protocol, disable link
+                    }
+                } catch {
+                    if (url !== '#') url = '#';  // Invalid URL
+                }
                 
                 // Stamp type
                 let stampClass = '';
