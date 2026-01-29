@@ -974,6 +974,24 @@
             return '$' + price.toFixed(2);
         }
         
+        // Normalize price to always have $ symbol and consistent format
+        function normalizePrice(price) {
+            if (!price || price === 'N/A' || price === 'None' || price === null) return null;
+            
+            // Convert to string
+            let priceStr = String(price).trim();
+            
+            // Remove any existing $ symbol and commas
+            priceStr = priceStr.replace(/[$,]/g, '');
+            
+            // Parse as float
+            const num = parseFloat(priceStr);
+            if (isNaN(num)) return null;
+            
+            // Return formatted with $
+            return '$' + num.toFixed(2);
+        }
+        
         function updateItemsList() {
             const list = document.getElementById('itemsList');
             
@@ -994,8 +1012,8 @@
             
             list.innerHTML = sorted.map(p => {
                 const name = p.name || p.title || 'Unknown Product';
-                const salePrice = p.sale_price || p.price || 'N/A';
-                const originalPrice = p.original_price;
+                const salePrice = normalizePrice(p.sale_price || p.price) || 'N/A';
+                const originalPrice = normalizePrice(p.original_price);
                 const condition = p.condition || '';
                 
                 // XSS Protection: Validate URL scheme
@@ -1040,10 +1058,10 @@
                             <span class="stamp ${stampClass}">${stampText}</span>
                         </div>
                         <div class="item-original ${originalPrice ? '' : 'empty'}">
-                            ${originalPrice ? escapeHtml(originalPrice) : '—'}
+                            ${originalPrice ? `~~${originalPrice}~~` : '—'}
                         </div>
                         <div class="item-pricing">
-                            <div class="item-price">${escapeHtml(salePrice)}</div>
+                            <div class="item-price">${salePrice}</div>
                             ${p._savings_amount ? `<div class="item-savings">SAVE ${formatPrice(p._savings_amount)}</div>` : ''}
                             ${p._savings_percent ? `<div class="item-percent">(${p._savings_percent}% OFF)</div>` : ''}
                         </div>
