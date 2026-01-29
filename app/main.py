@@ -123,7 +123,7 @@ class ActiveSearchTracker:
         self.active_searches.pop(client_ip, None)
 
 
-rate_limiter = RateLimiter(requests_per_minute=5)
+rate_limiter = RateLimiter(requests_per_minute=9)
 search_tracker = ActiveSearchTracker()
 
 # Global session with retry capability
