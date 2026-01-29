@@ -245,14 +245,14 @@ SITES = {
     "amazon": {
         "name": "Amazon Warehouse",
         "search_url": "https://www.amazon.com/s?k={query}&i=specialty-aps&srs=12653393011",
-        "goal": "Extract the first 5 products that match '{query}'. Only include products related to '{query}'. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields. Skip sponsored items and unrelated products.",
+        "goal": "Extract the first 5 Renewed/Used/Refurbished '{query}' products only. Skip NEW items and accessories. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
         "browser_profile": "stealth",
         "proxy_config": {"enabled": True, "country_code": "US"}
     },
     "bestbuy": {
         "name": "Best Buy Outlet",
         "search_url": "https://www.bestbuy.com/site/searchpage.jsp?st={query}&qp=condition_facet%3DCondition~Open-Box",
-        "goal": "Extract the first 5 Open-Box products that match '{query}'. Only include products related to '{query}'. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
+        "goal": "Extract the first 5 Open-Box '{query}' products. Only include main devices, NOT accessories like controllers, cables, cases, or chargers. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
         "browser_profile": "stealth"
     },
     "newegg": {
@@ -268,7 +268,7 @@ SITES = {
     "swappa": {
         "name": "Swappa",
         "search_url": "https://swappa.com/search?q={query}",
-        "goal": "Extract the first 5 products that match '{query}'. Only include actual devices, skip accessories. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
+        "goal": "Extract the first 5 '{query}' listings with complete data. Each must have name, price. Skip any listing without a price. Return ONLY a JSON array: [{{name, original_price, sale_price, condition, product_url}}]. Use null for missing fields.",
         "browser_profile": "stealth"
     },
     "walmart": {
