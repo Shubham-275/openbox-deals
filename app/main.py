@@ -421,7 +421,7 @@ async def search_live(
                         MINO_API_URL,
                         json=payload,
                         headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=200)  # 200s per site max
+                        timeout=aiohttp.ClientTimeout(total=250)  # 250s per site max
                     ) as response:
                         
                         if response.status != 200:
@@ -519,7 +519,7 @@ async def search_live(
                         "type": "session_error",
                         "site": site_key,
                         "site_name": site_config["name"],
-                        "error": "Timeout (200s)"
+                        "error": "Timeout (250s)"
                     })
                 except Exception as e:
                     await event_queue.put({
@@ -561,9 +561,9 @@ async def search_live(
                     elapsed = round(time.time() - start_time, 1)
                     yield f"data: {json.dumps({'type': 'heartbeat', 'elapsed': elapsed})}\n\n"
                     
-                    # Global timeout: 4 minutes max
-                    if elapsed > 240:
-                        yield f"data: {json.dumps({'type': 'timeout', 'message': 'Search timeout after 4 minutes'})}\n\n"
+                    # Global timeout: 5 minutes max
+                    if elapsed > 300:
+                        yield f"data: {json.dumps({'type': 'timeout', 'message': 'Search timeout after 5 minutes'})}\n\n"
                         break
             
             # Cancel any remaining tasks
