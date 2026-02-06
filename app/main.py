@@ -23,7 +23,7 @@ from urllib.parse import quote_plus, urlparse
 from collections import defaultdict
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
-MINO_API_URL = "https://mino.ai/v1/automation/run-sse"
+MINO_API_URL = "https://agent.tinyfish.ai/v1/automation/run-sse"
 MINO_API_KEY = os.getenv("MINO_API_KEY", "")
 
 # =============================================================================
