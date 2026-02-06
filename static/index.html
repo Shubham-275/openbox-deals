@@ -52,6 +52,22 @@
             text-align: center;
             padding: 40px 20px 30px;
             border-bottom: 2px dashed #333;
+            position: relative;
+        }
+        
+        .created-by {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 0.65rem;
+            color: #666;
+            text-decoration: none;
+            letter-spacing: 0.5px;
+            transition: color 0.2s;
+        }
+        
+        .created-by:hover {
+            color: #000;
         }
         
         .logo {
@@ -570,6 +586,7 @@
 <body>
     <div class="receipt-container">
         <header>
+            <a href="https://x.com/_shakechilli_" target="_blank" rel="noopener" class="created-by">Created by @_shakechilli_</a>
             <div class="logo">OPEN-BOX DEALS</div>
             <div class="tagline">Warehouse Outlet Pricing</div>
             <div class="barcode-visual" id="barcode"></div>
